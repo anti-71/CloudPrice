@@ -50,3 +50,6 @@ __pycache__/
 # Runtime output (auto-generated)
 data/
 logs/
+
+# Course documents (not for GitHub)
+*.docx
