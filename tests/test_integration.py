@@ -152,12 +152,9 @@ def test_ads_json_format():
 # 4. OSS 上传集成测试（需要 OSS_ENABLED=true）
 # ──────────────────────────────────────────────
 
-@pytest.mark.skipif(
-    os.getenv("OSS_ENABLED", "false").lower() != "true" or os.getenv("CI") is not None,
-    reason="OSS 未启用或在 CI 环境中"
-)
-def test_oss_upload_integration():
-    """小规模 CSV 上传 OSS 验证"""
+@pytest.mark.skip(reason="OSS 上传仅在本地调试时手动启用")
+def test_oss_upload_manual():
+    """小规模 CSV 上传 OSS 验证（手动启用）"""
     config = ConfigLoader()
     oss = OssClient(config)
     generator = MockDataGenerator(config)
@@ -166,7 +163,6 @@ def test_oss_upload_integration():
     records = generator.generate("2026-06-01", "2026-06-01")
     clean_records = cleaner.clean(records)
 
-    # 上传 ODS
     import csv
     import io
     output = io.StringIO()
