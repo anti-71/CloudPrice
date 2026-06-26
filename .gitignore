@@ -46,3 +46,7 @@ __pycache__/
 
 # Reasonix AI metadata
 .reasonix/
+
+# Runtime output (auto-generated)
+data/
+logs/
