@@ -5,6 +5,10 @@ from pathlib import Path
 from typing import Any, List
 
 import yaml
+from dotenv import load_dotenv
+
+# 自动加载项目根目录的 .env 文件
+load_dotenv()
 
 
 class ConfigLoader:
