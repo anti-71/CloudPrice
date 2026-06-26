@@ -1,0 +1,162 @@
+[
+  {
+    "date": "2026-06-01",
+    "index": 100.0,
+    "changePct": 0.0,
+    "category": "运动户外",
+    "skuId": "SKU0001",
+    "productName": "玉兰油运动装备 SKU0001"
+  },
+  {
+    "date": "2026-06-01",
+    "index": 100.0,
+    "changePct": 0.0,
+    "category": "美妆个护",
+    "skuId": "SKU0002",
+    "productName": "三只松鼠护肤精华 SKU0002"
+  },
+  {
+    "date": "2026-06-01",
+    "index": 100.0,
+    "changePct": 0.0,
+    "category": "手机数码",
+    "skuId": "SKU0003",
+    "productName": "美的智能手机 SKU0003"
+  },
+  {
+    "date": "2026-06-01",
+    "index": 100.0,
+    "changePct": 0.0,
+    "category": "手机数码",
+    "skuId": "SKU0004",
+    "productName": "海尔智能手机 SKU0004"
+  },
+  {
+    "date": "2026-06-01",
+    "index": 100.0,
+    "changePct": 0.0,
+    "category": "日用百货",
+    "skuId": "SKU0005",
+    "productName": "索尼日用商品 SKU0005"
+  },
+  {
+    "date": "2026-06-01",
+    "index": 100.0,
+    "changePct": 0.0,
+    "category": "服饰鞋包",
+    "skuId": "SKU0006",
+    "productName": "格力时尚运动鞋 SKU0006"
+  },
+  {
+    "date": "2026-06-01",
+    "index": 100.0,
+    "changePct": 0.0,
+    "category": "食品饮料",
+    "skuId": "SKU0007",
+    "productName": "良品铺子精选零食礼包 SKU0007"
+  },
+  {
+    "date": "2026-06-01",
+    "index": 100.0,
+    "changePct": 0.0,
+    "category": "家用电器",
+    "skuId": "SKU0008",
+    "productName": "华为智能家电 SKU0008"
+  },
+  {
+    "date": "2026-06-01",
+    "index": 100.0,
+    "changePct": 0.0,
+    "category": "家用电器",
+    "skuId": "SKU0009",
+    "productName": "索尼智能家电 SKU0009"
+  },
+  {
+    "date": "2026-06-01",
+    "index": 100.0,
+    "changePct": 0.0,
+    "category": "服饰鞋包",
+    "skuId": "SKU0010",
+    "productName": "三只松鼠时尚运动鞋 SKU0010"
+  },
+  {
+    "date": "2026-06-01",
+    "index": 100.0,
+    "changePct": 0.0,
+    "category": "电脑办公",
+    "skuId": "SKU0011",
+    "productName": "Adidas笔记本电脑 SKU0011"
+  },
+  {
+    "date": "2026-06-01",
+    "index": 100.0,
+    "changePct": 0.0,
+    "category": "服饰鞋包",
+    "skuId": "SKU0012",
+    "productName": "美的时尚运动鞋 SKU0012"
+  },
+  {
+    "date": "2026-06-01",
+    "index": 100.0,
+    "changePct": 0.0,
+    "category": "手机数码",
+    "skuId": "SKU0013",
+    "productName": "欧莱雅智能手机 SKU0013"
+  },
+  {
+    "date": "2026-06-01",
+    "index": 100.0,
+    "changePct": 0.0,
+    "category": "日用百货",
+    "skuId": "SKU0014",
+    "productName": "格力日用商品 SKU0014"
+  },
+  {
+    "date": "2026-06-01",
+    "index": 100.0,
+    "changePct": 0.0,
+    "category": "电脑办公",
+    "skuId": "SKU0015",
+    "productName": "联想笔记本电脑 SKU0015"
+  },
+  {
+    "date": "2026-06-01",
+    "index": 100.0,
+    "changePct": 0.0,
+    "category": "家用电器",
+    "skuId": "SKU0016",
+    "productName": "Adidas智能家电 SKU0016"
+  },
+  {
+    "date": "2026-06-01",
+    "index": 100.0,
+    "changePct": 0.0,
+    "category": "运动户外",
+    "skuId": "SKU0017",
+    "productName": "格力运动装备 SKU0017"
+  },
+  {
+    "date": "2026-06-01",
+    "index": 100.0,
+    "changePct": 0.0,
+    "category": "美妆个护",
+    "skuId": "SKU0018",
+    "productName": "海尔护肤精华 SKU0018"
+  },
+  {
+    "date": "2026-06-01",
+    "index": 100.0,
+    "changePct": 0.0,
+    "category": "美妆个护",
+    "skuId": "SKU0019",
+    "productName": "玉兰油护肤精华 SKU0019"
+  },
+  {
+    "date": "2026-06-01",
+    "index": 100.0,
+    "changePct": 0.0,
+    "category": "运动户外",
+    "skuId": "SKU0020",
+    "productName": "NIKE运动装备 SKU0020"
+  }
+]
