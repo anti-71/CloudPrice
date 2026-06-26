@@ -2,7 +2,7 @@
 """
 Cloud Price Index 主入口
 
-基于阿里云 OSS 与 DataV 的高频电商价格指数计算平台
+基于阿里云 OSS 的高频电商价格指数计算平台
 
 数据分层：ODS → DWD → DWS → ADS
 
@@ -11,6 +11,8 @@ Cloud Price Index 主入口
   --start-date YYYY-MM-DD  指定开始日期
   --end-date YYYY-MM-DD    指定结束日期
   无参数                   从配置文件读取日期范围
+
+所有数据直接上传 OSS，不写本地磁盘。
 """
 
 import argparse
@@ -29,29 +31,30 @@ from src.models import (
     RawPriceRecord, SkuDailySummary
 )
 from src.report.report_generator import ReportGenerator
-from src.storage.local_storage import LocalStorage
 from src.storage.oss_client import OssClient
 from src.util.config_loader import ConfigLoader
 from src.util.logger_config import setup_logger
 
 
 def main():
-    # 初始化日志
     logger = setup_logger("cloud_price_index")
 
     logger.info("=" * 40)
     logger.info("  Cloud Price Index - Starting...")
+    logger.info("  All data will be uploaded to OSS directly")
     logger.info("=" * 40)
 
     try:
-        # 加载配置
         config = ConfigLoader()
         logger.info(
             "Config loaded: project=%s, skuCount=%d, dirtyRate=%.2f",
             config.project_name, config.sku_count, config.dirty_data_rate
         )
 
-        # 解析日期参数
+        if not config.oss_enabled:
+            logger.error("OSS_ENABLED is not set to true. OSS is required.")
+            sys.exit(1)
+
         parser = argparse.ArgumentParser(description="Cloud Price Index")
         parser.add_argument("--date", help="指定单个日期 (YYYY-MM-DD)")
         parser.add_argument("--start-date", help="指定开始日期 (YYYY-MM-DD)")
@@ -69,8 +72,6 @@ def main():
 
         logger.info("Date range: %s to %s", start_date, end_date)
 
-        # 初始化各组件
-        localStorage = LocalStorage()
         ossClient = OssClient(config)
         generator = MockDataGenerator(config)
         cleaner = DataCleaner()
@@ -78,34 +79,32 @@ def main():
         indexComputer = IndexComputer(config.base_date)
         reportGenerator = ReportGenerator()
 
-        # ========== 1. ODS 层：生成原始数据 ==========
+        # ========== 1. ODS 层 ==========
         logger.info("--- ODS Layer: Generating raw data ---")
         rawRecords = generator.generate(start_date, end_date)
-        save_raw_records(localStorage, ossClient, config, rawRecords)
+        save_raw_to_oss(ossClient, config, rawRecords)
 
-        # ========== 2. DWD 层：数据清洗 ==========
+        # ========== 2. DWD 层 ==========
         logger.info("--- DWD Layer: Cleaning data ---")
         cleanRecords = cleaner.clean(rawRecords)
-        save_clean_records(localStorage, ossClient, config, cleanRecords)
+        save_clean_to_oss(ossClient, config, cleanRecords)
 
-        # ========== 3. DWS 层：数据汇总 ==========
+        # ========== 3. DWS 层 ==========
         logger.info("--- DWS Layer: Aggregating data ---")
         aggregation = aggregator.aggregate(cleanRecords)
-        save_sku_summaries(localStorage, ossClient, config, aggregation.sku_summaries)
-        save_category_summaries(localStorage, ossClient, config, aggregation.category_summaries)
-        save_overall_summaries(localStorage, ossClient, config, aggregation.overall_summaries)
+        save_sku_to_oss(ossClient, config, aggregation.sku_summaries)
+        save_category_to_oss(ossClient, config, aggregation.category_summaries)
+        save_overall_to_oss(ossClient, config, aggregation.overall_summaries)
 
-        # ========== 4. ADS 层：指数计算 ==========
+        # ========== 4. ADS 层 ==========
         logger.info("--- ADS Layer: Computing price indices ---")
         indices = indexComputer.compute(
             aggregation.sku_summaries,
             aggregation.category_summaries,
             aggregation.overall_summaries
         )
-
-        # 保存 ADS 层 JSON
-        save_ads_data(localStorage, ossClient, config, indices,
-                      aggregation.overall_summaries, reportGenerator)
+        save_ads_to_oss(ossClient, config, indices,
+                        aggregation.overall_summaries, reportGenerator)
 
         logger.info("=" * 40)
         logger.info("  Cloud Price Index - Completed!")
@@ -126,26 +125,25 @@ def main():
         sys.exit(1)
 
 
-# ========== ODS 层存储 ==========
+# ========== ODS 层 OSS 上传 ==========
 
-def save_raw_records(localStorage: LocalStorage, ossClient: OssClient,
-                     config: ConfigLoader, records: List[RawPriceRecord]):
-    by_date: dict = defaultdict(list)
+def save_raw_to_oss(ossClient, config, records):
+    by_date = defaultdict(list)
     for r in records:
         by_date[r.date].append(r)
 
     for date_str, day_records in by_date.items():
         csv_content = to_raw_csv(day_records)
         filename = "product_price_raw.csv"
-        rows = [row.split(",") for row in csv_content.strip().split("\n")]
-        localStorage.write_csv("ods", filename, rows)
-        oss_key = ossClient.build_key("ods", f"dt={date_str}", filename)
-        ossClient.upload_string(oss_key, csv_content)
+        ossClient.upload_string(
+            ossClient.build_key("ods", f"dt={date_str}", filename),
+            csv_content
+        )
 
-    get_logger().info("Saved %d raw records to ODS layer", len(records))
+    get_logger().info("Uploaded %d raw records to ODS layer", len(records))
 
 
-def to_raw_csv(records: List[RawPriceRecord]) -> str:
+def to_raw_csv(records):
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["date", "sku_id", "product_id", "product_name", "category_l1",
@@ -160,26 +158,25 @@ def to_raw_csv(records: List[RawPriceRecord]) -> str:
     return output.getvalue()
 
 
-# ========== DWD 层存储 ==========
+# ========== DWD 层 OSS 上传 ==========
 
-def save_clean_records(localStorage: LocalStorage, ossClient: OssClient,
-                       config: ConfigLoader, records: List[CleanPriceRecord]):
-    by_date: dict = defaultdict(list)
+def save_clean_to_oss(ossClient, config, records):
+    by_date = defaultdict(list)
     for r in records:
         by_date[r.date].append(r)
 
     for date_str, day_records in by_date.items():
         csv_content = to_clean_csv(day_records)
         filename = "product_price_clean.csv"
-        rows = [row.split(",") for row in csv_content.strip().split("\n")]
-        localStorage.write_csv("dwd", filename, rows)
-        oss_key = ossClient.build_key("dwd", f"dt={date_str}", filename)
-        ossClient.upload_string(oss_key, csv_content)
+        ossClient.upload_string(
+            ossClient.build_key("dwd", f"dt={date_str}", filename),
+            csv_content
+        )
 
-    get_logger().info("Saved %d clean records to DWD layer", len(records))
+    get_logger().info("Uploaded %d clean records to DWD layer", len(records))
 
 
-def to_clean_csv(records: List[CleanPriceRecord]) -> str:
+def to_clean_csv(records):
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["date", "sku_id", "product_id", "product_name", "category_l1",
@@ -194,25 +191,22 @@ def to_clean_csv(records: List[CleanPriceRecord]) -> str:
     return output.getvalue()
 
 
-# ========== DWS 层存储 ==========
+# ========== DWS 层 OSS 上传 ==========
 
-def save_sku_summaries(localStorage: LocalStorage, ossClient: OssClient,
-                       config: ConfigLoader, summaries: List[SkuDailySummary]):
-    csv_content = to_sku_summary_csv(summaries)
+def save_sku_to_oss(ossClient, config, summaries):
     filename = "sku_daily_summary.csv"
-    rows = [row.split(",") for row in csv_content.strip().split("\n")]
-    localStorage.write_csv("dws", filename, rows)
-    # Partition by date group for OSS
-    by_date: dict = defaultdict(list)
+    by_date = defaultdict(list)
     for s in summaries:
         by_date[s.date].append(s)
     for dt, day_summaries in sorted(by_date.items()):
         day_csv = to_sku_summary_csv(day_summaries)
-        ossClient.upload_string(ossClient.build_key("dws", f"dt={dt}", filename), day_csv)
-    get_logger().info("Saved %d SKU summaries", len(summaries))
+        ossClient.upload_string(
+            ossClient.build_key("dws", f"dt={dt}", filename), day_csv
+        )
+    get_logger().info("Uploaded %d SKU summaries to DWS layer", len(summaries))
 
 
-def to_sku_summary_csv(summaries: List[SkuDailySummary]) -> str:
+def to_sku_summary_csv(summaries):
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["date", "sku_id", "product_id", "product_name", "category_l1",
@@ -227,22 +221,20 @@ def to_sku_summary_csv(summaries: List[SkuDailySummary]) -> str:
     return output.getvalue()
 
 
-def save_category_summaries(localStorage: LocalStorage, ossClient: OssClient,
-                            config: ConfigLoader, summaries: List[CategoryDailySummary]):
-    csv_content = to_category_summary_csv(summaries)
+def save_category_to_oss(ossClient, config, summaries):
     filename = "category_daily_summary.csv"
-    rows = [row.split(",") for row in csv_content.strip().split("\n")]
-    localStorage.write_csv("dws", filename, rows)
-    by_date: dict = defaultdict(list)
+    by_date = defaultdict(list)
     for s in summaries:
         by_date[s.date].append(s)
     for dt, day_summaries in sorted(by_date.items()):
         day_csv = to_category_summary_csv(day_summaries)
-        ossClient.upload_string(ossClient.build_key("dws", f"dt={dt}", filename), day_csv)
-    get_logger().info("Saved %d category summaries", len(summaries))
+        ossClient.upload_string(
+            ossClient.build_key("dws", f"dt={dt}", filename), day_csv
+        )
+    get_logger().info("Uploaded %d category summaries to DWS layer", len(summaries))
 
 
-def to_category_summary_csv(summaries: List[CategoryDailySummary]) -> str:
+def to_category_summary_csv(summaries):
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["date", "category_l1", "category_l2", "avg_price", "min_price",
@@ -255,22 +247,20 @@ def to_category_summary_csv(summaries: List[CategoryDailySummary]) -> str:
     return output.getvalue()
 
 
-def save_overall_summaries(localStorage: LocalStorage, ossClient: OssClient,
-                           config: ConfigLoader, summaries: List[OverallDailySummary]):
-    csv_content = to_overall_summary_csv(summaries)
+def save_overall_to_oss(ossClient, config, summaries):
     filename = "overall_daily_summary.csv"
-    rows = [row.split(",") for row in csv_content.strip().split("\n")]
-    localStorage.write_csv("dws", filename, rows)
-    by_date: dict = defaultdict(list)
+    by_date = defaultdict(list)
     for s in summaries:
         by_date[s.date].append(s)
     for dt, day_summaries in sorted(by_date.items()):
         day_csv = to_overall_summary_csv(day_summaries)
-        ossClient.upload_string(ossClient.build_key("dws", f"dt={dt}", filename), day_csv)
-    get_logger().info("Saved %d overall summaries", len(summaries))
+        ossClient.upload_string(
+            ossClient.build_key("dws", f"dt={dt}", filename), day_csv
+        )
+    get_logger().info("Uploaded %d overall summaries to DWS layer", len(summaries))
 
 
-def to_overall_summary_csv(summaries: List[OverallDailySummary]) -> str:
+def to_overall_summary_csv(summaries):
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["date", "avg_price", "min_price", "max_price",
@@ -283,38 +273,41 @@ def to_overall_summary_csv(summaries: List[OverallDailySummary]) -> str:
     return output.getvalue()
 
 
-# ========== ADS 层存储 ==========
+# ========== ADS 层 OSS 上传 ==========
 
-def save_ads_data(localStorage: LocalStorage, ossClient: OssClient,
-                  config: ConfigLoader, indices,
-                  overall_summaries: List[OverallDailySummary],
-                  reportGenerator: ReportGenerator):
+def save_ads_to_oss(ossClient, config, indices,
+                    overall_summaries, reportGenerator):
     # overall_index.json
-    overall_json = reportGenerator.to_json(indices.overall_indices)
-    localStorage.write_json("ads", "overall_index.json", overall_json)
-    ossClient.upload_string(ossClient.build_key("ads", "", "overall_index.json"), overall_json)
+    ossClient.upload_string(
+        ossClient.build_key("ads", "", "overall_index.json"),
+        reportGenerator.to_json(indices.overall_indices)
+    )
 
     # category_index.json
-    category_json = reportGenerator.to_json(indices.category_indices)
-    localStorage.write_json("ads", "category_index.json", category_json)
-    ossClient.upload_string(ossClient.build_key("ads", "", "category_index.json"), category_json)
+    ossClient.upload_string(
+        ossClient.build_key("ads", "", "category_index.json"),
+        reportGenerator.to_json(indices.category_indices)
+    )
 
     # sku_index.json
-    sku_json = reportGenerator.to_json(indices.sku_indices)
-    localStorage.write_json("ads", "sku_index.json", sku_json)
-    ossClient.upload_string(ossClient.build_key("ads", "", "sku_index.json"), sku_json)
+    ossClient.upload_string(
+        ossClient.build_key("ads", "", "sku_index.json"),
+        reportGenerator.to_json(indices.sku_indices)
+    )
 
     # top_movers.json
-    movers_json = reportGenerator.to_json(indices.top_movers)
-    localStorage.write_json("ads", "top_movers.json", movers_json)
-    ossClient.upload_string(ossClient.build_key("ads", "", "top_movers.json"), movers_json)
+    ossClient.upload_string(
+        ossClient.build_key("ads", "", "top_movers.json"),
+        reportGenerator.to_json(indices.top_movers)
+    )
 
     # daily_report.json
-    report_json = reportGenerator.generate_daily_report(indices.overall_indices, overall_summaries)
-    localStorage.write_json("ads", "daily_report.json", report_json)
-    ossClient.upload_string(ossClient.build_key("ads", "", "daily_report.json"), report_json)
+    ossClient.upload_string(
+        ossClient.build_key("ads", "", "daily_report.json"),
+        reportGenerator.generate_daily_report(indices.overall_indices, overall_summaries)
+    )
 
-    get_logger().info("Saved ADS layer: overall_index, category_index, sku_index, top_movers, daily_report")
+    get_logger().info("Uploaded ADS layer to OSS")
 
 
 def get_logger():
