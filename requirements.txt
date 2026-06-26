@@ -2,3 +2,4 @@ oss2>=2.18.4
 PyYAML>=6.0
 pytest>=8.0
 python-dotenv>=1.0
+clickhouse-driver>=0.2.6

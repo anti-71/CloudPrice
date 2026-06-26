@@ -83,3 +83,25 @@ class ConfigLoader:
     @property
     def oss_prefix(self) -> str:
         return os.getenv("OSS_PREFIX", "price-index-platform")
+
+    # ---- ClickHouse 配置 ----
+
+    @property
+    def clickhouse_host(self) -> str:
+        return os.getenv("CLICKHOUSE_HOST", "localhost")
+
+    @property
+    def clickhouse_port(self) -> int:
+        return int(os.getenv("CLICKHOUSE_PORT", "8123"))
+
+    @property
+    def clickhouse_user(self) -> str:
+        return os.getenv("CLICKHOUSE_USER", "default")
+
+    @property
+    def clickhouse_password(self) -> str:
+        return os.getenv("CLICKHOUSE_PASSWORD", "")
+
+    @property
+    def clickhouse_database(self) -> str:
+        return os.getenv("CLICKHOUSE_DATABASE", "price_index")
