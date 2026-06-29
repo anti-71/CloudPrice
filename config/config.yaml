@@ -1,7 +1,7 @@
 project-name: cloud-price-index
-base-date: "2026-06-01"
-start-date: "2026-06-01"
-end-date: "2026-06-30"
+base-date: "2023-06-01"
+start-date: "2023-06-01"
+end-date: "2026-05-31"
 sku-count: 2000
 platforms: ["淘宝", "京东", "拼多多"]
 categories: ["手机数码", "电脑办公", "家用电器", "食品饮料", "服饰鞋包", "美妆个护", "运动户外", "日用百货"]
