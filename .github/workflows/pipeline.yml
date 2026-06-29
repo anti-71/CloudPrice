@@ -1,0 +1,47 @@
+name: OSS Data Pipeline
+
+on:
+  workflow_dispatch:  # 手动触发
+  schedule:
+    - cron: '0 2 * * *'  # 每天凌晨2点自动运行
+
+jobs:
+  process:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install pandas python-dotenv PyYAML oss2 clickhouse-connect pytest
+
+      - name: Create .env from Secrets
+        run: |
+          echo "OSS_ENABLED=true" >> .env
+          echo "ALIYUN_OSS_ENDPOINT=${{ secrets.ALIYUN_OSS_ENDPOINT }}" >> .env
+          echo "ALIYUN_OSS_BUCKET=${{ secrets.ALIYUN_OSS_BUCKET }}" >> .env
+          echo "ALIYUN_ACCESS_KEY_ID=${{ secrets.ALIYUN_ACCESS_KEY_ID }}" >> .env
+          echo "ALIYUN_ACCESS_KEY_SECRET=${{ secrets.ALIYUN_ACCESS_KEY_SECRET }}" >> .env
+          echo "OSS_PREFIX=price-index-platform" >> .env
+          echo "CLICKHOUSE_HOST=${{ secrets.CLICKHOUSE_HOST }}" >> .env
+          echo "CLICKHOUSE_PORT=${{ secrets.CLICKHOUSE_PORT }}" >> .env
+          echo "CLICKHOUSE_USER=${{ secrets.CLICKHOUSE_USER }}" >> .env
+          echo "CLICKHOUSE_PASSWORD=${{ secrets.CLICKHOUSE_PASSWORD }}" >> .env
+          echo "CLICKHOUSE_DATABASE=${{ secrets.CLICKHOUSE_DATABASE }}" >> .env
+
+      - name: Generate & Upload to OSS
+        run: python src/main.py --date $(date +%Y-%m-%d)
+
+      - name: Import to ClickHouse
+        run: |
+          python import_to_clickhouse.py
+          python query_clickhouse.py overview
+
+      - name: Run tests
+        run: PYTHONPATH=. pytest tests/ -v --tb=short
