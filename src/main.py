@@ -38,7 +38,7 @@ def main():
 
     # ── 日期 ──
     args = _parse_args()
-    start, end = args.get("start", config.start_date), args.get("end", config.end_date)
+    start, end = args.get("start") or config.start_date, args.get("end") or config.end_date
     if args.get("date"):
         start = end = args["date"]
     dates = _date_range(start, end)
