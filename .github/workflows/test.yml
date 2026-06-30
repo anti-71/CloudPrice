@@ -1,4 +1,6 @@
-name: Run Tests
+name: CI - Tests
+
+# 每次 push / PR 自动运行单元测试 + 集成测试
 
 on:
   push:
@@ -9,20 +11,19 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
-      - name: Check out code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: "3.12"
 
-      - name: Install dependencies
+      - name: Install
         run: pip install -r requirements.txt
 
-      - name: Run tests
+      - name: Unit + Integration tests
         env:
           CLICKHOUSE_HOST: ${{ secrets.CLICKHOUSE_HOST }}
           CLICKHOUSE_PORT: ${{ secrets.CLICKHOUSE_PORT }}

@@ -1,27 +1,31 @@
-name: OSS Data Pipeline
+name: CI - Full Pipeline (OSS → ClickHouse → 折线图)
+
+# 手动触发 或 每天凌晨 2:00 UTC 自动运行
 
 on:
-  workflow_dispatch:  # 手动触发
+  workflow_dispatch:
   schedule:
-    - cron: '0 2 * * *'  # 每天凌晨2点自动运行
+    - cron: "0 2 * * *"
 
 jobs:
-  process:
+  pipeline:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: "3.12"
 
+      # ── 安装依赖 ──
       - name: Install dependencies
-        run: pip install pandas python-dotenv PyYAML oss2 clickhouse-connect pytest
+        run: |
+          pip install pandas python-dotenv PyYAML oss2 matplotlib requests
 
-      - name: Create .env from Secrets
+      # ── 注入密钥 ──
+      - name: Create .env
         run: |
           echo "OSS_ENABLED=true" >> .env
           echo "ALIYUN_OSS_ENDPOINT=${{ secrets.ALIYUN_OSS_ENDPOINT }}" >> .env
@@ -35,13 +39,30 @@ jobs:
           echo "CLICKHOUSE_PASSWORD=${{ secrets.CLICKHOUSE_PASSWORD }}" >> .env
           echo "CLICKHOUSE_DATABASE=${{ secrets.CLICKHOUSE_DATABASE }}" >> .env
 
-      - name: Generate & Upload to OSS
-        run: python src/main.py --date $(date +%Y-%m-%d)
-
-      - name: Import to ClickHouse
-        run: |
-          python import_to_clickhouse.py
-          python query_clickhouse.py overview
-
+      # ── 运行测试 ──
       - name: Run tests
         run: PYTHONPATH=. pytest tests/ -v --tb=short
+
+      # ── 生成数据 → OSS ──
+      - name: Generate & upload to OSS
+        run: |
+          TODAY=$(date +%Y-%m-%d)
+          python src/main.py --date $TODAY
+        continue-on-error: true
+
+      # ── 导入 ClickHouse ──
+      - name: Import to ClickHouse
+        run: python import_to_clickhouse.py
+        continue-on-error: true
+
+      # ── 生成折线图 ──
+      - name: Generate chart
+        run: python visualization.py
+        continue-on-error: true
+
+      # ── 上传产物 ──
+      - name: Upload chart artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: price-index-chart
+          path: price_index_trend.png
