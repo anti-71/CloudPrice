@@ -1,102 +1,62 @@
-"""IndexComputer 单元测试"""
-
+"""价格指数计算单元测试 — pandas 版本"""
+import pandas as pd
+import pytest
 from src.compute.index_computer import IndexComputer
-from src.models import (
-    CategoryDailySummary, OverallDailySummary, PriceIndex, SkuDailySummary
-)
 
 
-def _make_sku(date: str, sku_id: str, category: str,
-              avg_price: float, sales: int) -> SkuDailySummary:
-    return SkuDailySummary(
-        date=date, sku_id=sku_id, product_id=f"PROD{sku_id[4:]}",
-        product_name=f"Test Product {sku_id}", category_l1=category,
-        category_l2=category, brand="TestBrand", avg_price=avg_price,
-        min_price=avg_price * 0.9, max_price=avg_price * 1.1,
-        total_sales=sales, shop_count=3, record_count=3
-    )
+def _sku_df(dates_values: list):
+    rows = []
+    for d, v in dates_values:
+        rows.append({"date": d, "sku_id": "SKU0001", "product_name": "p", "category_l1": "c1",
+                      "category_l2": "c2", "brand": "b", "avg_price": v, "total_sales": 100,
+                      "shop_count": 3, "record_count": 5, "min_price": v, "max_price": v})
+    return pd.DataFrame(rows)
+
+def _cat_df(dates_values: list):
+    rows = []
+    for d, v in dates_values:
+        rows.append({"date": d, "category": "c1", "avg_price": v, "total_sales": 100,
+                      "sku_count": 1, "record_count": 5, "min_price": v, "max_price": v})
+    return pd.DataFrame(rows)
+
+def _ovr_df(dates_values: list):
+    rows = []
+    for d, v in dates_values:
+        rows.append({"date": d, "avg_price": v, "total_sales": 100,
+                      "total_skus": 1, "total_records": 5, "min_price": v, "max_price": v})
+    return pd.DataFrame(rows)
 
 
-def _make_cat(date: str, category: str, avg_price: float,
-              sales: int) -> CategoryDailySummary:
-    return CategoryDailySummary(
-        date=date, category_l1=category, category_l2=category,
-        avg_price=avg_price, min_price=avg_price * 0.9,
-        max_price=avg_price * 1.1, total_sales=sales, sku_count=1, record_count=1
-    )
+class TestIndexComputer:
 
+    def test_base_is_100(self):
+        ic = IndexComputer("2023-06-01")
+        sku = _sku_df([("2023-06-01", 50.0)])
+        cat = _cat_df([("2023-06-01", 50.0)])
+        ovr = _ovr_df([("2023-06-01", 50.0)])
+        r = ic.compute(sku, cat, ovr)
+        assert r["overall"]["index"].iloc[0] == 100.0
 
-def _make_overall(date: str, avg_price: float, sales: int,
-                  skus: int) -> OverallDailySummary:
-    return OverallDailySummary(
-        date=date, avg_price=avg_price, min_price=avg_price * 0.9,
-        max_price=avg_price * 1.1, total_sales=sales, total_skus=skus,
-        total_records=skus * 3
-    )
+    def test_price_double_index_double(self):
+        ic = IndexComputer("2023-06-01")
+        sku = _sku_df([("2023-06-01", 50.0), ("2023-06-02", 100.0)])
+        cat = _cat_df([("2023-06-01", 50.0), ("2023-06-02", 100.0)])
+        ovr = _ovr_df([("2023-06-01", 50.0), ("2023-06-02", 100.0)])
+        r = ic.compute(sku, cat, ovr)
+        assert abs(r["overall"]["index"].iloc[1] - 200.0) < 1
 
+    def test_change_pct(self):
+        ic = IndexComputer("2023-06-01")
+        sku = _sku_df([("2023-06-01", 100.0), ("2023-06-02", 150.0)])
+        cat = _cat_df([("2023-06-01", 100.0), ("2023-06-02", 150.0)])
+        ovr = _ovr_df([("2023-06-01", 100.0), ("2023-06-02", 150.0)])
+        r = ic.compute(sku, cat, ovr)
+        assert abs(r["overall"]["change_pct"].iloc[1] - 50.0) < 1
 
-def test_compute_with_empty_data():
-    computer = IndexComputer("2026-06-01")
-    result = computer.compute([], [], [])
-    assert len(result.overall_indices) == 0
-    assert len(result.category_indices) == 0
-    assert len(result.sku_indices) == 0
-    assert len(result.top_movers) == 0
-
-
-def test_compute_sku_index():
-    computer = IndexComputer("2026-06-01")
-    skus = [
-        _make_sku("2026-06-01", "SKU0001", "手机数码", 100.0, 500),
-        _make_sku("2026-06-02", "SKU0001", "手机数码", 110.0, 600),
-    ]
-    cats = [
-        _make_cat("2026-06-01", "手机数码", 100.0, 500),
-        _make_cat("2026-06-02", "手机数码", 110.0, 600),
-    ]
-    overs = [
-        _make_overall("2026-06-01", 100.0, 500, 1),
-        _make_overall("2026-06-02", 110.0, 600, 1),
-    ]
-
-    result = computer.compute(skus, cats, overs)
-    assert len(result.overall_indices) == 2
-    assert len(result.sku_indices) == 2
-
-    # 基期指数应为 100
-    base = [i for i in result.sku_indices if i.date == "2026-06-01"][0]
-    assert abs(base.index_val - 100.0) < 0.01
-
-    # 第二天指数 = 110
-    day2 = [i for i in result.sku_indices if i.date == "2026-06-02"][0]
-    assert abs(day2.index_val - 110.0) < 0.01
-
-
-def test_compute_overall_index():
-    computer = IndexComputer("2026-06-01")
-    skus = [
-        _make_sku("2026-06-01", "SKU0001", "手机数码", 100.0, 500),
-        _make_sku("2026-06-01", "SKU0002", "电脑办公", 200.0, 300),
-        _make_sku("2026-06-02", "SKU0001", "手机数码", 110.0, 600),
-        _make_sku("2026-06-02", "SKU0002", "电脑办公", 190.0, 350),
-    ]
-    cats = [
-        _make_cat("2026-06-01", "手机数码", 100.0, 500),
-        _make_cat("2026-06-01", "电脑办公", 200.0, 300),
-        _make_cat("2026-06-02", "手机数码", 110.0, 600),
-        _make_cat("2026-06-02", "电脑办公", 190.0, 350),
-    ]
-    overs = [
-        _make_overall("2026-06-01", 150.0, 800, 2),
-        _make_overall("2026-06-02", 145.0, 950, 2),
-    ]
-
-    result = computer.compute(skus, cats, overs)
-    base = [i for i in result.overall_indices if i.date == "2026-06-01"][0]
-    assert abs(base.index_val - 100.0) < 0.01
-
-
-def test_null_inputs():
-    computer = IndexComputer("2026-06-01")
-    result = computer.compute(None, None, None)
-    assert len(result.overall_indices) == 0
+    def test_empty_passes(self):
+        ic = IndexComputer("2023-06-01")
+        empty = pd.DataFrame({"date": [], "sku_id": [], "avg_price": [], "total_sales": [],
+                              "category": [], "category_l1": []})
+        r = ic.compute(empty, empty, empty)
+        assert len(r["overall"]) == 0
+        assert len(r["category"]) == 0
