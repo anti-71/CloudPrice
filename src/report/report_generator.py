@@ -6,8 +6,6 @@
 import json
 from typing import Dict, List
 
-from src.models import OverallDailySummary, PriceIndex
-
 
 class ReportGenerator:
     """报告生成器"""

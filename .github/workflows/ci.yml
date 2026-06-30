@@ -101,11 +101,11 @@ jobs:
         continue-on-error: true
 
       - name: 导入 ClickHouse
-        run: python import_to_clickhouse.py
+        run: python scripts/import_to_clickhouse.py
         continue-on-error: true
 
       - name: 生成折线图
-        run: python visualization.py
+        run: python scripts/visualization.py
         continue-on-error: true
 
       - name: 上传折线图产物
