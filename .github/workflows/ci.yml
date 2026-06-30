@@ -66,10 +66,7 @@ jobs:
           echo "CLICKHOUSE_DATABASE=${{ secrets.CLICKHOUSE_DATABASE || 'price_index' }}" >> .env
 
       - name: OSS 上传验证
-        run: PYTHONPATH=. python -m pytest tests/test_oss_verify.py -v
-
-      - name: ClickHouse SQL 验证
-        run: PYTHONPATH=. python -m pytest tests/test_clickhouse.py -v
+        run: PYTHONPATH=. python -m pytest tests/test_oss_verify.py tests/test_clickhouse.py -v
         continue-on-error: true
 
   # ──────────────────────────────────────
