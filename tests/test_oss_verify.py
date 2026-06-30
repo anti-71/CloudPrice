@@ -20,8 +20,6 @@ def _oss_ready():
 
 
 def _ch_ready():
-    if os.getenv("CI"):
-        return False  # GitHub-hosted runner 无法连 ClickHouse（白名单）
     return os.getenv("CLICKHOUSE_HOST", "") != ""
 
 

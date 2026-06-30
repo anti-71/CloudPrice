@@ -9,9 +9,6 @@ from src.util.config_loader import ConfigLoader
 
 
 def _clickhouse_available():
-    """CI 中 GitHub-hosted runner 无法连 ClickHouse（白名单）"""
-    if os.getenv("CI"):
-        return False
     return os.getenv("CLICKHOUSE_HOST", "") != ""
 
 
