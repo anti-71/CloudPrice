@@ -1,0 +1,136 @@
+name: CI/CD — 完整自动化流程
+
+# 代码提交自动触发
+on:
+  push:
+    branches: [master, main, dev]
+  pull_request:
+    branches: [master, main]
+  workflow_dispatch:
+
+jobs:
+
+  # ──────────────────────────────────────
+  # Stage 1：数据格式校验 + 字段类型转换
+  # ──────────────────────────────────────
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install pandas PyYAML python-dotenv oss2
+      - run: PYTHONPATH=. pytest tests/test_data_format.py -v
+
+  # ──────────────────────────────────────
+  # Stage 2：单元测试 + 集成测试
+  # ──────────────────────────────────────
+  test:
+    needs: format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install pandas PyYAML python-dotenv oss2
+      - name: 单元测试
+        run: PYTHONPATH=. pytest tests/test_index_computer.py tests/test_data_format.py -v
+      - name: 集成测试
+        run: PYTHONPATH=. pytest tests/test_integration.py -v
+
+  # ──────────────────────────────────────
+  # Stage 3：OSS 上传 + ClickHouse SQL 验证
+  # ──────────────────────────────────────
+  oss_ch_verify:
+    needs: test
+    runs-on: ubuntu-latest
+    continue-on-error: true  # ClickHouse 白名单限制，不阻塞 CI
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install pandas PyYAML python-dotenv oss2
+
+      - name: 注入密钥
+        run: |
+          echo "OSS_ENABLED=${{ secrets.OSS_ENABLED || 'true' }}" >> .env
+          echo "ALIYUN_OSS_ENDPOINT=${{ secrets.ALIYUN_OSS_ENDPOINT }}" >> .env
+          echo "ALIYUN_OSS_BUCKET=${{ secrets.ALIYUN_OSS_BUCKET }}" >> .env
+          echo "ALIYUN_ACCESS_KEY_ID=${{ secrets.ALIYUN_ACCESS_KEY_ID }}" >> .env
+          echo "ALIYUN_ACCESS_KEY_SECRET=${{ secrets.ALIYUN_ACCESS_KEY_SECRET }}" >> .env
+          echo "OSS_PREFIX=price-index-platform" >> .env
+          echo "CLICKHOUSE_HOST=${{ secrets.CLICKHOUSE_HOST }}" >> .env
+          echo "CLICKHOUSE_PORT=${{ secrets.CLICKHOUSE_PORT || '8123' }}" >> .env
+          echo "CLICKHOUSE_USER=${{ secrets.CLICKHOUSE_USER || 'default' }}" >> .env
+          echo "CLICKHOUSE_PASSWORD=${{ secrets.CLICKHOUSE_PASSWORD }}" >> .env
+          echo "CLICKHOUSE_DATABASE=${{ secrets.CLICKHOUSE_DATABASE || 'price_index' }}" >> .env
+
+      - name: OSS 上传验证
+        run: PYTHONPATH=. pytest tests/test_oss_verify.py -v
+
+      - name: ClickHouse SQL 验证
+        run: PYTHONPATH=. pytest tests/test_clickhouse.py -v
+        continue-on-error: true
+
+  # ──────────────────────────────────────
+  # Stage 4：自动部署至 ClickHouse + 生成折线图
+  # ──────────────────────────────────────
+  deploy:
+    needs: oss_ch_verify
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install pandas PyYAML python-dotenv oss2 matplotlib requests
+
+      - name: 注入密钥
+        run: |
+          echo "OSS_ENABLED=true" >> .env
+          echo "ALIYUN_OSS_ENDPOINT=${{ secrets.ALIYUN_OSS_ENDPOINT }}" >> .env
+          echo "ALIYUN_OSS_BUCKET=${{ secrets.ALIYUN_OSS_BUCKET }}" >> .env
+          echo "ALIYUN_ACCESS_KEY_ID=${{ secrets.ALIYUN_ACCESS_KEY_ID }}" >> .env
+          echo "ALIYUN_ACCESS_KEY_SECRET=${{ secrets.ALIYUN_ACCESS_KEY_SECRET }}" >> .env
+          echo "OSS_PREFIX=price-index-platform" >> .env
+          echo "CLICKHOUSE_HOST=${{ secrets.CLICKHOUSE_HOST }}" >> .env
+          echo "CLICKHOUSE_PORT=${{ secrets.CLICKHOUSE_PORT || '8123' }}" >> .env
+          echo "CLICKHOUSE_USER=${{ secrets.CLICKHOUSE_USER || 'default' }}" >> .env
+          echo "CLICKHOUSE_PASSWORD=${{ secrets.CLICKHOUSE_PASSWORD }}" >> .env
+          echo "CLICKHOUSE_DATABASE=${{ secrets.CLICKHOUSE_DATABASE || 'price_index' }}" >> .env
+
+      - name: 生成数据 → OSS
+        run: python src/main.py --date $(date +%Y-%m-%d)
+        continue-on-error: true
+
+      - name: 导入 ClickHouse
+        run: python import_to_clickhouse.py
+        continue-on-error: true
+
+      - name: 生成折线图
+        run: python visualization.py
+        continue-on-error: true
+
+      - name: 上传折线图产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: price-index-chart
+          path: price_index_trend.png
+
+  # ──────────────────────────────────────
+  # 汇总报告
+  # ──────────────────────────────────────
+  report:
+    needs: [format, test, oss_ch_verify, deploy]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: CI Summary
+        run: |
+          echo "========================================="
+          echo "  CI/CD Pipeline Complete"
+          echo "  1. Format Validation  — ${{ needs.format.result }}"
+          echo "  2. Unit + Integ Tests — ${{ needs.test.result }}"
+          echo "  3. OSS + CH Verify    — ${{ needs.oss_ch_verify.result }}"
+          echo "  4. Deploy + Chart     — ${{ needs.deploy.result }}"
+          echo "========================================="
