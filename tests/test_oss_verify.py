@@ -20,6 +20,8 @@ def _oss_ready():
 
 
 def _ch_ready():
+    if os.getenv("CI"):
+        return False  # GitHub Runner 白名单不可靠
     return os.getenv("CLICKHOUSE_HOST", "") != ""
 
 

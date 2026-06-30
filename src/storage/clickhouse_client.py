@@ -28,7 +28,7 @@ class ClickHouseClient:
             self.base_url,
             params={"query": sql},
             auth=self._auth,
-            timeout=60,
+            timeout=10,
         )
         resp.raise_for_status()
         return resp.text
@@ -54,7 +54,7 @@ class ClickHouseClient:
             self.base_url,
             params={"query": sql},
             auth=self._auth,
-            timeout=120,
+            timeout=30,
         )
         resp.raise_for_status()
         return resp.text
